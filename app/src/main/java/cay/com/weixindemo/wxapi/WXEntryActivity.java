@@ -1,13 +1,22 @@
 package cay.com.weixindemo.wxapi;
 
 import android.app.Activity;
+import android.content.Context;
+import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.Toast;
 
+import com.squareup.okhttp.Call;
+import com.squareup.okhttp.Callback;
+import com.squareup.okhttp.OkHttpClient;
+import com.squareup.okhttp.Request;
+import com.squareup.okhttp.Response;
+import com.tencent.mm.sdk.constants.ConstantsAPI;
 import com.tencent.mm.sdk.modelbase.BaseReq;
 import com.tencent.mm.sdk.modelbase.BaseResp;
 import com.tencent.mm.sdk.modelmsg.SendAuth;
@@ -20,16 +29,23 @@ import com.tencent.mm.sdk.openapi.IWXAPI;
 import com.tencent.mm.sdk.openapi.IWXAPIEventHandler;
 import com.tencent.mm.sdk.openapi.WXAPIFactory;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.IOException;
 import java.net.URL;
 
 import cay.com.weixindemo.R;
 import cay.com.weixindemo.wxapi.Util.Util;
+import de.greenrobot.event.EventBus;
+import de.greenrobot.event.Subscribe;
+import de.greenrobot.event.ThreadMode;
 
 /**
  * Created by C on 2016/8/17.
  */
 public class WXEntryActivity extends Activity implements IWXAPIEventHandler ,View.OnClickListener{
-    private static final String APP_ID = "wx9d9f1e3deacd44d2";
+    private static final String APP_ID = "wxab940fc44ffda729";
     private IWXAPI mWeiXinAPI;
     private Button loginButton;
     private Button webshareWeiXinButton;
@@ -47,9 +63,13 @@ public class WXEntryActivity extends Activity implements IWXAPIEventHandler ,Vie
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        EventBus.getDefault().register(this);
+
         initView();
         mWeiXinAPI = WXAPIFactory.createWXAPI(this, APP_ID, true);
         mWeiXinAPI.registerApp(APP_ID);
+        mWeiXinAPI.handleIntent(getIntent(), this);
         loginButton.setOnClickListener(this);
         webshareFriendButton.setOnClickListener(this);
         webshareWeiXinButton.setOnClickListener(this);
@@ -63,6 +83,18 @@ public class WXEntryActivity extends Activity implements IWXAPIEventHandler ,Vie
         imageshareFriendButton.setOnClickListener(this);
     }
 
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        EventBus.getDefault().unregister(this);
+    }
+
+    @Subscribe(threadMode = ThreadMode.MainThread)
+    public void helloEve(String message) {
+        if (message.equals("finsh")) {
+            finish();
+        }
+    }
     private void initView() {
         loginButton = (Button) findViewById(R.id.login_btn);
         webshareFriendButton = (Button) findViewById(R.id.share_friend_btn);
@@ -130,7 +162,80 @@ public class WXEntryActivity extends Activity implements IWXAPIEventHandler ,Vie
 
     @Override
     public void onResp(BaseResp baseResp) {
+        Log.i("TAG", "getType() : "+baseResp.getType() );
+        if (baseResp.getType() == ConstantsAPI.COMMAND_SENDMESSAGE_TO_WX) {
+            Toast.makeText(WXEntryActivity.this,"分享成功",Toast.LENGTH_LONG).show();
+        }
+        if (baseResp.getType() == ConstantsAPI.COMMAND_SENDAUTH) {
+            switch (baseResp.errCode) {
+                case BaseResp.ErrCode.ERR_OK:
+                    String code = ((SendAuth.Resp) baseResp).code;
+                    Log.i("TAG", "code: " + code);
+
+                    if (code != null) {
+                        String urll = "https://api.weixin.qq.com/sns/oauth2/access_token?appid=wxab940fc44ffda729&secret=19a13a1fe8c4aa79d95d1e18f66c9ca5&code=" + code + "&grant_type=authorization_code";
+                        OkHttpClient mOkHttpClient = new OkHttpClient();
+                        Request mRequest = new Request.Builder()
+                                .url(urll)
+                                .build();
+                        Call mCall = mOkHttpClient.newCall(mRequest);
+                        mCall.enqueue(new Callback() {
+                            @Override
+                            public void onFailure(Request request, IOException e) {
+
+                            }
+
+                            @Override
+                            public void onResponse(Response response) throws IOException {
+                                String mmm = response.body().string();
+                                Log.i("TAG", "mmm: "+mmm);
+
+                                try {
+                                    JSONObject mmmJsonObject = new JSONObject(mmm);
+                                    String USER = "https://api.weixin.qq.com/sns/userinfo?access_token=" + mmmJsonObject.getString("access_token") + "&openid=" + mmmJsonObject.getString("openid");
+
+                                    OkHttpClient userMesClient = new OkHttpClient();
+                                    Request userRequest = new Request.Builder()
+                                            .url(USER)
+                                            .build();
+                                    Call userCall = userMesClient.newCall(userRequest);
+                                    userCall.enqueue(new Callback() {
+                                        @Override
+                                        public void onFailure(Request request, IOException e) {
+
+                                        }
+
+                                        @Override
+                                        public void onResponse(Response response) throws IOException {
+                                            String mmmUSER = response.body().string();
+                                            Intent intent = new Intent(WXEntryActivity.this, MainActivity.class);
+                                            intent.putExtra("USER_MES", mmmUSER);
+                                            EventBus.getDefault().post("finsh");
+                                            startActivity(intent);
+                                            Log.i("TAG", "mmmUSER: "+mmmUSER);
+                                        }
+                                    });
+
+                                } catch (JSONException e) {
+                                    e.printStackTrace();
+                                }
+                                Log.i("TAG", "mmm: "+mmm);
+                            }
+                        });
+
+                    }
+                    break;
+                case BaseResp.ErrCode.ERR_AUTH_DENIED:
+
+                    break;
+                case BaseResp.ErrCode.ERR_USER_CANCEL:
+                    break;
+            }
+        }
+
     }
+
+
 
     private void weImageUrlShare(int flag) {
         String url = "http://weixin.qq.com/zh_CN/htmledition/images/weixin/weixin_logo0d1938.png";

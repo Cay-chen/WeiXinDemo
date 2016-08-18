@@ -24,4 +24,6 @@ dependencies {
     testCompile 'junit:junit:4.12'
     compile 'com.android.support:appcompat-v7:24.0.0'
     compile files('libs/libammsdk.jar')
+    compile 'com.squareup.okhttp:okhttp:2.7.5'
+    compile 'de.greenrobot:eventbus:3.0.0-beta1'
 }
