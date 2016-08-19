@@ -1,10 +1,10 @@
 package cay.com.weixindemo.wxapi;
 
 import android.app.Activity;
-import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Color;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
@@ -16,6 +16,9 @@ import com.squareup.okhttp.Callback;
 import com.squareup.okhttp.OkHttpClient;
 import com.squareup.okhttp.Request;
 import com.squareup.okhttp.Response;
+import com.tencent.connect.auth.QQAuth;
+import com.tencent.connect.share.QQShare;
+import com.tencent.connect.share.QzoneShare;
 import com.tencent.mm.sdk.constants.ConstantsAPI;
 import com.tencent.mm.sdk.modelbase.BaseReq;
 import com.tencent.mm.sdk.modelbase.BaseResp;
@@ -28,14 +31,19 @@ import com.tencent.mm.sdk.modelmsg.WXWebpageObject;
 import com.tencent.mm.sdk.openapi.IWXAPI;
 import com.tencent.mm.sdk.openapi.IWXAPIEventHandler;
 import com.tencent.mm.sdk.openapi.WXAPIFactory;
+import com.tencent.tauth.IUiListener;
+import com.tencent.tauth.Tencent;
 
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.IOException;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
 
 import cay.com.weixindemo.R;
+import cay.com.weixindemo.wxapi.Util.BaseUiListener;
 import cay.com.weixindemo.wxapi.Util.Util;
 import de.greenrobot.event.EventBus;
 import de.greenrobot.event.Subscribe;
@@ -46,6 +54,9 @@ import de.greenrobot.event.ThreadMode;
  */
 public class WXEntryActivity extends Activity implements IWXAPIEventHandler ,View.OnClickListener{
     private static final String APP_ID = "wxab940fc44ffda729";
+    private static final String QQ_APP_ID = "222222";
+    private QQAuth mQqAuth;
+    private Tencent mTencent;
     private IWXAPI mWeiXinAPI;
     private Button loginButton;
     private Button webshareWeiXinButton;
@@ -58,7 +69,11 @@ public class WXEntryActivity extends Activity implements IWXAPIEventHandler ,Vie
     private Button yinyueshareFriendButton;
     private Button imageshareWeiXinButton;
     private Button imageshareFriendButton;
+    private Button qqButtonLogin;
+    private Button qqshareButton;
+    private Button kongjianShareButton;
 
+    private IUiListener listener;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -67,8 +82,15 @@ public class WXEntryActivity extends Activity implements IWXAPIEventHandler ,Vie
         EventBus.getDefault().register(this);
 
         initView();
+
+        // 微信
         mWeiXinAPI = WXAPIFactory.createWXAPI(this, APP_ID, true);
         mWeiXinAPI.registerApp(APP_ID);
+
+        // QQ
+        mQqAuth = QQAuth.createInstance(QQ_APP_ID, this.getApplicationContext());
+        mTencent = Tencent.createInstance(QQ_APP_ID, this.getApplicationContext());
+
         mWeiXinAPI.handleIntent(getIntent(), this);
         loginButton.setOnClickListener(this);
         webshareFriendButton.setOnClickListener(this);
@@ -81,6 +103,9 @@ public class WXEntryActivity extends Activity implements IWXAPIEventHandler ,Vie
         yinyueshareFriendButton.setOnClickListener(this);
         imageshareWeiXinButton.setOnClickListener(this);
         imageshareFriendButton.setOnClickListener(this);
+        qqButtonLogin.setOnClickListener(this);
+        qqshareButton.setOnClickListener(this);
+        kongjianShareButton.setOnClickListener(this);
     }
 
     @Override
@@ -107,6 +132,9 @@ public class WXEntryActivity extends Activity implements IWXAPIEventHandler ,Vie
         yinyueshareFriendButton = (Button) findViewById(R.id.yinyue_share_friend_btn);
         imageshareWeiXinButton = (Button) findViewById(R.id.image_share_weixin_btn);
         imageshareFriendButton = (Button) findViewById(R.id.image_share_friend_btn);
+        qqButtonLogin = (Button) findViewById(R.id.btn_qqlogin);
+        kongjianShareButton = (Button) findViewById(R.id.btn_kongjianshare);
+        qqshareButton = (Button) findViewById(R.id.btn_qqshare);
 
     }
     /**
@@ -332,7 +360,123 @@ public class WXEntryActivity extends Activity implements IWXAPIEventHandler ,Vie
             case R.id.image_share_weixin_btn:
                 weiImageShare(1);
                 break;
+            case R.id.btn_qqlogin:
+                Log.i("TAGAA", "登录");
+
+                onClickLogin();
+                break;
+            case R.id.btn_qqshare:
+                Log.i("TAGAA", "QQ分享");
+
+                share(qqshareButton);
+                break;
+            case R.id.btn_kongjianshare:
+                Log.i("TAGAA", "空间分享");
+                //share(kongjianShareButton);
+                shareToQzone();
+                break;
         }
+    }
+
+
+    /**
+     * QQ登录
+     */
+    public void onClickLogin() {
+        // 登录
+        if (!mQqAuth.isSessionValid()) {
+            // 实例化回调接口
+             listener = new BaseUiListener() {
+                @Override
+                protected void doComplete(Object values) {
+
+                    Log.i("TAGAA", "成功 "+values);
+
+                    // updateUserInfo();
+                    // updateLoginButton();
+                    if (mQqAuth != null) {
+                       // mNewLoginButton.setTextColor(Color.BLUE);
+                      //  mNewLoginButton.setText("登录");
+                    }
+                }
+            };
+            // "all": 所有权限，listener: 回调的实例
+          //  mQqAuth.login(this, "all", listener);
+
+            // 这版本登录是使用的这种方式，后面的几个参数是啥意思 我也没查到
+           mTencent.loginWithOEM(this, "all", listener, "10000144",
+                  "10000144", "xxxx");
+        } else {
+            // 注销登录
+            mQqAuth.logout(this);
+         //   updateUserInfo();
+
+            // updateLoginButton();
+        //    mNewLoginButton.setTextColor(Color.RED);
+          //  mNewLoginButton.setText("退出帐号");
+        }
+    }
+
+
+    public void share(View view)
+    {
+
+        Bundle bundle = new Bundle();
+//这条分享消息被好友点击后的跳转URL。
+
+        bundle.putString(QQShare.SHARE_TO_QQ_TARGET_URL, "http://connect.qq.com/");
+//分享的标题。注：PARAM_TITLE、PARAM_IMAGE_URL、PARAM_	SUMMARY不能全为空，最少必须有一个是有值的。
+        bundle.putString(QQShare.SHARE_TO_QQ_TITLE, "我在测试");
+//分享的图片URL
+        bundle.putString(QQShare.SHARE_TO_QQ_IMAGE_URL,
+                "http://img3.cache.netease.com/photo/0005/2013-03-07/8PBKS8G400BV0005.jpg");
+//分享的消息摘要，最长50个字
+        bundle.putString(QQShare.SHARE_TO_QQ_SUMMARY, "测试");
+//手Q客户端顶部，替换“返回”按钮文字，如果为空，用返回代替
+        bundle.putString(QQShare.SHARE_TO_QQ_APP_NAME, "??我在测试");
+//标识该消息的来源应用，值为应用名称+AppId。
+   //     bundle.putString(Constants.PARAM_APP_SOURCE, "星期几" + AppId);
+
+        switch (view.getId()) {
+            case R.id.btn_qqshare:
+                mTencent.shareToQQ(this, bundle , new BaseUiListener());
+                break;
+            case R.id.btn_kongjianshare:
+                mTencent.shareToQzone(this, bundle, new BaseUiListener());
+                break;
+        }
+
+    }
+
+    private void shareToQzone () {
+
+
+        ArrayList<String> mlist = new ArrayList<String>();
+        mlist.add("http://img3.cache.netease.com/photo/0005/2013-03-07/8PBKS8G400BV0005.jpg");
+        mlist.add("http://img3.cache.netease.com/photo/0005/2013-03-07/8PBKS8G400BV0005.jpg");
+        mlist.add("http://img3.cache.netease.com/photo/0005/2013-03-07/8PBKS8G400BV0005.jpg");
+        mlist.add("http://img3.cache.netease.com/photo/0005/2013-03-07/8PBKS8G400BV0005.jpg");
+
+        Bundle params = new Bundle();
+
+        //分享类型
+       params.putInt(QzoneShare.SHARE_TO_QZONE_KEY_TYPE,QzoneShare.SHARE_TO_QZONE_TYPE_IMAGE_TEXT);
+        params.putString(QzoneShare.SHARE_TO_QQ_TITLE, "标题");//必填
+        params.putString(QzoneShare.SHARE_TO_QQ_SUMMARY, "摘要");//选填
+        params.putString(QzoneShare.SHARE_TO_QQ_TARGET_URL, "www.baidu.com");//必填
+        params.putStringArrayList(QzoneShare.SHARE_TO_QQ_IMAGE_URL, mlist);
+        mTencent.shareToQzone(this, params, new BaseUiListener());
+    }
+
+
+
+
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        Tencent.onActivityResultData(requestCode,resultCode,data,listener);
+        if (null != mTencent)
+            mTencent.onActivityResult(requestCode, resultCode, data);
     }
 
 }
